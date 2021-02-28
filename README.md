@@ -1,2 +1,2 @@
-# Books Recommendation Project
+# Book Recommendations Project
 Book recommendations project for DSTI 
