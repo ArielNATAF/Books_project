@@ -1,18 +1,42 @@
 import sys
 import pandas as pd
 import re
+import time
 
 chemin = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees\BookCrossing/'
 chemin = chemin.replace('\\', '/')
 
 sys.path.append(chemin)
 
+    
+def ParserCsvInputBookCrossing(currentLine):
+
+    L = currentLine.split(';')
+    
+    if len(L) == 8:
+        return L
+        
+    else:
+        g = re.search('([0-9X]+);(.+);([0-9]{4,4})(.+)(;http.+.jpg)+(;http.+.jpg)+(;http.+.jpg)+', currentLine)
+
+        g_2 = g[2].split('"')
+        if len(g_2) == 1:
+            g_2_12 = g[2].split(';')
+        else:
+            g_2_12 = [g_2[i] for i in range(len(g_2)) if not (g_2[i] == '' or g_2[i] == ';')]
+     
+        return [x.strip(';') for x in [g[1], g_2_12[0], g_2_12[1], g[3], g[4], g[5], g[6], g[7]]]
+
+
 
 def BooksSearchFunction(isbn = None, title = None, author = None):
-
+    ''' Find information on internet about the book entered in function's arguments 
+        Either isbn = ..., Or title = ..., author = ... '''
+    
+    #3 kinds of books identifiers
     ISBNdict = {"ISBN_10": 0, "ISBN_13": 0, "OtherID": 0}
     
-#    print("\nRecherche livre: %d" % i)
+    #all is reset
     ISBNdict["ISBN_10"] = 0
     ISBNdict["ISBN_13"] = 0   
     ISBNdict["OtherID"] = 0
@@ -27,17 +51,22 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
     repIsbnGoogle = ''
     
     try:
+        #book is searched on internet thanks to its ISBN_10 identifier
         if (isbn is not None):
             
             ISBNdict["ISBN_10"] = isbn
 
-            #We have to format the ISBN so that it is written on 10 digits => {0:0>10s}
+            #Request format for a search on Google Book web site
+            #=> We have to format the ISBN so that it is written on 10 digits => {0:0>10s}
             requeteIsbnGoogle = "https://www.googleapis.com/books/v1/volumes?q=isbn:{0:0>10s}".format(ISBNdict["ISBN_10"])
+#            print('\n\n', requeteIsbnGoogle)
     
             try:
+                #In case where a book reference has been found
                 repIsbnGoogle = pd.read_json(requeteIsbnGoogle)
                 ISBNfound = True
             except:
+                #In case where a book reference has NOT been found                
                 repIsbnGoogle = pd.read_json(requeteIsbnGoogle, typ = 'series')
                 ISBNfound = False
             
@@ -48,6 +77,7 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
                 if 'subtitle' in repIsbnGoogle['items'][0]['volumeInfo']:
                     titleSearched = titleSearched + ' : ' + repIsbnGoogle['items'][0]['volumeInfo']['subtitle']
         
+                #'industryIdentifiers' stands for ISBN_10, ISBN_13 or OtherID
                 if ('industryIdentifiers' in repIsbnGoogle['items'][0]['volumeInfo']):
                     
                     #Among all identifiers type proposed by Google, we search "ISBN_10", "ISBN_13" or "OtherID"
@@ -66,20 +96,24 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
                 if ('authors' in repIsbnGoogle['items'][0]['volumeInfo']):
                     autSearched = repIsbnGoogle['items'][0]['volumeInfo']['authors'][0]
                     
-                print(repIsbnGoogle['items'][0]['volumeInfo']['publishedDate'], 'publishedDate' in repIsbnGoogle['items'][0]['volumeInfo'])
+#                if ('publisher' in repIsbnGoogle['items'][0]['volumeInfo']):
+#                    autSearched = repIsbnGoogle['items'][0]['volumeInfo']['publisher']
+                                        
                 if ('publishedDate' in repIsbnGoogle['items'][0]['volumeInfo']):
-                    print(repIsbnGoogle['items'][0]['volumeInfo']['publishedDate'], 'publishedDate' in repIsbnGoogle['items'][0]['volumeInfo'])
                     pubData = repIsbnGoogle['items'][0]['volumeInfo']['publishedDate']
-                    print(pubData)
     
+        #book is searched on internet thanks to its title and 1st author
         else:
             if ((title != None) and (author != None)):
 
                 titleSearched = title
                 autSearched = author.lower()
                 
+                #Request format for a search on Google Book web site
+                #=> We must take care of ' (replace('\'', '')) and space (replace(' ','%20'))
                 requeteTitleGoogle = "https://www.googleapis.com/books/v1/volumes?q=title:%s" % (titleSearched.replace('\'', '').replace(' ','%20'))
                 repTitleGoogle = pd.read_json(requeteTitleGoogle) 
+#                print(requeteTitleGoogle)
                 
                 #The Title has been found on Google Books
                 #We only analyse the first book's reference retrieved => repTitleGoogle['items'][0]
@@ -97,6 +131,7 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
                             if (autSearched == autGoogle[j].lower()):
                                 AUTHORfound = True    
                                 
+                                #'industryIdentifiers' stands for ISBN_10, ISBN_13 or OtherID
                                 if ('industryIdentifiers' in repTitleGoogle['items'][0]['volumeInfo']):
                                     ISBNfound = True
                                     
@@ -123,55 +158,66 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
         raise Exception("There is un problem: ", excp)
 
 
-if __name__ == "__main__":
 
+
+    #'PLEADING GUILTY' found with ISBN: https://www.googleapis.com/books/v1/volumes?q=isbn:0671870432
+
+if __name__ == "__main__":
+#Example of Google Requests:
+############################
+    #'Classical Mythology' found with ISBN - no subtitle - ISBN found: https://www.googleapis.com/books/v1/volumes?q=isbn:0195153448
+    
+    #'Flu' found with ISBN - with subtitle - ISBN found:     https://www.googleapis.com/books/v1/volumes?q=isbn:0374157065
+    
+    #'Pride and Prejudice' NOT found with ISBN:https://www.googleapis.com/books/v1/volumes?q=isbn:055321215X
+    # => found with title - Other identifier than isbn: https://www.googleapis.com/books/v1/volumes?q=title:Pride%20and%20Prejudice
+    
+    #'Jogn Doe' NOT found with IBBN: https://www.googleapis.com/books/v1/volumes?q=isbn:1552041778
+    # => found with title : https://www.googleapis.com/books/v1/volumes?q=title:Jane%20Doe
+    # => But author on Google is wrong, so book considered as NOT FOUND
+    
+    #'Beloved (Plume Contemporary Fiction)' NOT found with ISBN: https://www.googleapis.com/books/v1/volumes?q=isbn:0452264464
+    # => Several references found with title: https://www.googleapis.com/books/v1/volumes?q=title:Beloved%20(Plume%20Contemporary%20Fiction)
+    # => But those references are not the one searched (but only the first reference is used), so book considered as NOT FOUND
+
+
+#Internet serach:
+#################
     #extraitFch = pd.read_csv(chemin + 'Extrait1000_BX-Books.csv', nrows = 32, delimiter = ';', header = 0)
     #ligne 33 pose problème à l'ouverture: encoding utf-32 marche encore moins bien que l'encoding par défaut
+    f = open(chemin + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="ignore")
+    f.readline()
     
-    with open(chemin + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="replace") as f:
-        L = f.readlines()
-    
-    LLpropre = []
-    
-    for i in range (1, len(L)):
-        L_i = L[i].split(';')
-        
-        if len(L_i) == 8:
-            LLpropre.append(L_i)
-            
-        else:
-            g = re.search('([0-9X]+);(.+);([0-9]{4,4})(.+)(;http.+.jpg)+(;http.+.jpg)+(;http.+.jpg)+', L[i])
-    
-            g_2 = g[2].split('"')
-            if len(g_2) == 1:
-                g_2_12 = g[2].split(';')
-            else:
-                g_2_12 = [g_2[i] for i in range(len(g_2)) if not (g_2[i] == '' or g_2[i] == ';')]
-         
-            LLpropre.append([x.strip(';') for x in [g[1], g_2_12[0], g_2_12[1], g[3], g[4], g[5], g[6], g[7]]])
-    
-    pdL = pd.DataFrame(LLpropre, columns = L[0].split(';'))
-    taille = pdL.shape[0]
-
     NotFoubndBooks = 0    
     theColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', 'Year-Of-Publication', 'Publisher', 'Image-URL-S', 'Image-URL-M', 'Image-URL-L']
     pdT = pd.DataFrame(columns = theColumns)
-    
-       
-    for i in range(0, 5):
+
+    csvLineParsed = ParserCsvInputBookCrossing(f.readline())
+    ret, refBook = BooksSearchFunction(isbn = csvLineParsed[0])
+    pdT.loc[0] = refBook
+    pd.DataFrame(pdT.loc[0:1], columns = theColumns).to_csv(chemin + 'BookCrossing_InternetSearch.csv', sep = ';', index = False, mode = 'w')
+
+    savingRate = 20   
+    for i in range(1, 1000):    
+        csvLineParsed = ParserCsvInputBookCrossing(f.readline())
+
         ret = False
-        
-        ret, refBook = BooksSearchFunction(isbn = pdL.iloc[i,0])
+        ret, refBook = BooksSearchFunction(isbn = csvLineParsed[0])
         
         if (ret == False):
-            ret, refBook = BooksSearchFunction(title = pdL.iloc[i,1], author = pdL.iloc[i,2].split(';')[-1])
+            ret, refBook = BooksSearchFunction(title = csvLineParsed[1], author = csvLineParsed[2].split(';')[-1])
             
         if (ret == False):
             NotFoubndBooks += 1
-        else:
-            pdT.loc[len(pdT)] = refBook
+
+        pdT.loc[len(pdT)] = refBook
+        if (i % savingRate == 0) and (i != 0):
+            pdT.loc[len(pdT) - savingRate:len(pdT)+1].to_csv(chemin + 'BookCrossing_InternetSearch.csv', sep = ';', index = False, mode = 'a', header = False)
+            time.sleep(10.0)
     
     print("Not found books: %d" % NotFoubndBooks)
+    f.close()
+    
   
     
         
