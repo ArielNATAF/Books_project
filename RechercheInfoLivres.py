@@ -37,13 +37,15 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
     ISBNdict = {"ISBN_10": 0, "ISBN_13": 0, "OtherID": 0}
     
     #all is reset
-    ISBNdict["ISBN_10"] = 0
-    ISBNdict["ISBN_13"] = 0   
-    ISBNdict["OtherID"] = 0
+    ISBNdict["ISBN_10"] = 0.0
+    ISBNdict["ISBN_13"] = 0.0   
+    ISBNdict["OtherID"] = 0.0
     autGoogle = []
     titleSearched = ''
     autSearched = ''
+    pubSearched = ''
     pubData = ''
+    catSearched = ''
 
     ISBNfound = False
     AUTHORfound = False
@@ -96,24 +98,27 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
                 if ('authors' in repIsbnGoogle['items'][0]['volumeInfo']):
                     autSearched = repIsbnGoogle['items'][0]['volumeInfo']['authors'][0]
                     
-#                if ('publisher' in repIsbnGoogle['items'][0]['volumeInfo']):
-#                    autSearched = repIsbnGoogle['items'][0]['volumeInfo']['publisher']
+                if ('publisher' in repIsbnGoogle['items'][0]['volumeInfo']):
+                    pubSearched = repIsbnGoogle['items'][0]['volumeInfo']['publisher']
                                         
                 if ('publishedDate' in repIsbnGoogle['items'][0]['volumeInfo']):
                     pubData = repIsbnGoogle['items'][0]['volumeInfo']['publishedDate']
-    
+
+                if ('categories' in repIsbnGoogle['items'][0]['volumeInfo']):
+                    catSearched = repIsbnGoogle['items'][0]['volumeInfo']['categories'][0]
+                    
         #book is searched on internet thanks to its title and 1st author
         else:
             if ((title != None) and (author != None)):
 
-                titleSearched = title
-                autSearched = author.lower()
+                titleSearched = title.encode('ascii', 'ignore').decode('ascii')
+                autSearched = author.encode('ascii', 'ignore').decode('ascii').lower()
                 
                 #Request format for a search on Google Book web site
                 #=> We must take care of ' (replace('\'', '')) and space (replace(' ','%20'))
                 requeteTitleGoogle = "https://www.googleapis.com/books/v1/volumes?q=title:%s" % (titleSearched.replace('\'', '').replace(' ','%20'))
-                repTitleGoogle = pd.read_json(requeteTitleGoogle) 
 #                print(requeteTitleGoogle)
+                repTitleGoogle = pd.read_json(requeteTitleGoogle) 
                 
                 #The Title has been found on Google Books
                 #We only analyse the first book's reference retrieved => repTitleGoogle['items'][0]
@@ -149,10 +154,17 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
                                     
                                     if ('publishedDate' in repTitleGoogle['items'][0]['volumeInfo']):
                                         pubData = repTitleGoogle['items'][0]['volumeInfo']['publishedDate']
+                                                            
+                                    if ('publisher' in repIsbnGoogle['items'][0]['volumeInfo']):
+                                        pubSearched = repIsbnGoogle['items'][0]['volumeInfo']['publisher']
+                                        
+                                    if ('categories' in repIsbnGoogle['items'][0]['volumeInfo']):
+                                        catSearched = repIsbnGoogle['items'][0]['volumeInfo']['categories'][0]
+
                                         
                             j += 1
 
-        return ISBNfound, [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, pubData, '', '', '', '']
+        return ISBNfound, [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, pubData, pubSearched, catSearched]
 
     except Exception as excp:
         raise Exception("There is un problem: ", excp)
@@ -162,7 +174,7 @@ def BooksSearchFunction(isbn = None, title = None, author = None):
 
     #'PLEADING GUILTY' found with ISBN: https://www.googleapis.com/books/v1/volumes?q=isbn:0671870432
 
-if __name__ == "__main__":
+def GoogleSearch():
 #Example of Google Requests:
 ############################
     #'Classical Mythology' found with ISBN - no subtitle - ISBN found: https://www.googleapis.com/books/v1/volumes?q=isbn:0195153448
@@ -180,25 +192,34 @@ if __name__ == "__main__":
     # => Several references found with title: https://www.googleapis.com/books/v1/volumes?q=title:Beloved%20(Plume%20Contemporary%20Fiction)
     # => But those references are not the one searched (but only the first reference is used), so book considered as NOT FOUND
 
+    #Problem with unknown characters, for example 'title = Die Mars- Chroniken. Roman in Erz?¤hlungen' triggers exception 
+    #Exception: ('There is un problem: ', UnicodeEncodeError('ascii', 'GET /books/v1/volumes?q=title:Die%20Mars-%20Chroniken.%20Roman%20in%20Erz?¤hlungen. HTTP/1.1', 74, 75, 'ordinal not in range(128)'))
+    #=> The solutyion is title.encode('ascii', 'ignore').decode('ascii') = Die Mars- Chroniken. Roman in Erz?hlungen
 
-#Internet serach:
+
+#Internet search:
 #################
     #extraitFch = pd.read_csv(chemin + 'Extrait1000_BX-Books.csv', nrows = 32, delimiter = ';', header = 0)
     #ligne 33 pose problème à l'ouverture: encoding utf-32 marche encore moins bien que l'encoding par défaut
-    f = open(chemin + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="ignore")
+    SaveFileName = 'BookCrossing_InternetSearch_04_03_2021.csv'
+    
+    f = open(chemin + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="replace")
     f.readline()
     
     NotFoubndBooks = 0    
-    theColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', 'Year-Of-Publication', 'Publisher', 'Image-URL-S', 'Image-URL-M', 'Image-URL-L']
+    theColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', 'Year-Of-Publication', 'Publisher', 'Category']
     pdT = pd.DataFrame(columns = theColumns)
 
     csvLineParsed = ParserCsvInputBookCrossing(f.readline())
     ret, refBook = BooksSearchFunction(isbn = csvLineParsed[0])
     pdT.loc[0] = refBook
-    pd.DataFrame(pdT.loc[0:1], columns = theColumns).to_csv(chemin + 'BookCrossing_InternetSearch.csv', sep = ';', index = False, mode = 'w')
+    pd.DataFrame(pdT.loc[0:1], columns = theColumns).to_csv(chemin + SaveFileName, sep = ';', index = False, mode = 'w')
 
-    savingRate = 20   
-    for i in range(1, 1000):    
+#    for i in range(1, 175): 
+#        f.readline()
+        
+    savingRate = 5   
+    for i in range(1, 10):    
         csvLineParsed = ParserCsvInputBookCrossing(f.readline())
 
         ret = False
@@ -212,13 +233,72 @@ if __name__ == "__main__":
 
         pdT.loc[len(pdT)] = refBook
         if (i % savingRate == 0) and (i != 0):
-            pdT.loc[len(pdT) - savingRate:len(pdT)+1].to_csv(chemin + 'BookCrossing_InternetSearch.csv', sep = ';', index = False, mode = 'a', header = False)
+            pdT.loc[len(pdT) - savingRate:len(pdT)+1].to_csv(chemin + SaveFileName, sep = ';', index = False, mode = 'a', header = False)
             time.sleep(10.0)
     
     print("Not found books: %d" % NotFoubndBooks)
     f.close()
+ 
+if __name__ == "__main__":
+    #GoogleSearch()    
     
+    from urllib.request import urlopen
+    import bs4
+
+    #recherche avec le titre 'Jane Doe' et le nom de l'auteur 'Kaiser'
+#    r = requests.get('https://www.goodreads.com/search?utf8=%E2%9C%93&q=jane+doe+kaiser&search_type=books')
+#    print(r.content, type(r))
+#    with open('D:/DocsDeCara/Boulot/IA_ML/DSTI/Programme/ML_with_Python/Projet/Donnees/GoodReads/urlRecupereee.txt', "wb") as f:				#il faut ouvrir au format binaire
+#        f.write(r.content)
+
+    #Dedans il y a <div id="1730953" et <div id="9675352" qui indique les identifiants Good Reads pour ces livres
+    #=> il y a 2 autres <div id="... mais ce ne sont pas des chiffres qui suivents derrière
+    
+    #Ensuite si on fait : 'https://www.goodreads.com/book/show/1730953', on va sur la page du livre
+    
+    source = urlopen('https://www.goodreads.com/book/show/1730953')
+    soup = bs4.BeautifulSoup(source, 'html.parser')
+    #print(re.findall(r'nisbn: [0-9]{10}' , str(soup))[0].split()[1]) => marche pas
+    print(soup.find("h1", id="bookTitle").text)
+    
+    print(soup.find("a", class_="authorName").find("span", itemprop="name").text)
+    
+    searchForISBN = soup.find("div", id="bookDataBox").find_all("div", class_="clearFloats")
+    for i in range(len(searchForISBN)):
+
+        if searchForISBN[i].find("div", "infoBoxRowTitle").text == 'ISBN':
+            isbnFull = searchForISBN[i].find("div", "infoBoxRowItem")
+            
+            if isbnFull.find("span", class_="greyText"):
+                print(isbnFull.text.split(isbnFull.find("span", class_="greyText").text))
+                print(isbnFull.find("span", class_="greyText").text)
+    
+    searchForLanguage = soup.find("div", id="bookDataBox").find_all("div", class_="clearFloats")
+    for i in range(len(searchForLanguage)):
+
+        if searchForISBN[i].find("div", "infoBoxRowTitle").text == 'Edition Language':
+            print(searchForISBN[i].find("div", "infoBoxRowItem").text)
+    
+    searchForPublished = soup.find("div", id="details").find_all("div", class_="row")
+    for i in range(len(searchForPublished)):
+        if 'Published' in searchForPublished[i].text:
+            print(searchForPublished[i].text.strip().replace('\n', ''))
+            print(searchForPublished[i].text.strip().replace('\n', '').replace('Published', '').split('by'))
+    
+    searchForPages = soup.find("div", id="details").find_all("div", class_="row")
+    for i in range(len(searchForPages)):
+        if 'pages' in searchForPages[i].text:
+            print(searchForPublished[i].text)
+            
+
+    print(soup.find_all("a", class_="actionLinkLite bookPageGenreLink"))
   
     
-        
-
+            
+#    goodreads_html = requests.get('https://www.goodreads.com/book/show/1730953')
+#    doc = html.fromstring(goodreads_html.text)
+#    print(doc)
+#    print('\n\n')
+#    print(doc.xpath('//div[@id="topcol"]//h1[@id="bookTitle"]')[0].text.strip(", \t\n\r"))
+#    print('\n\n')
+#    print(doc.xpath('//div[@id="topcol"]//a[@class="authorName"]//span')[0].text.strip(", \t\n\r"))
