@@ -124,7 +124,9 @@ def GoogleSearchFunction(isbn = None, title = None, author = None):
             if ((title != None) and (author != None)):
 
                 titleSearched = title.encode('ascii', 'ignore').decode('ascii')
-                autSearched = author.encode('ascii', 'ignore').decode('ascii').lower()
+                autSearched = author.encode('ascii', 'ignore').decode('ascii')
+                #We keep only the author familly name
+                autSearchedInternal = autSearched.lower().split()[-1]
                 
                 #Request format for a search on Google Book web site
                 #=> We must take care of ' (replace('\'', '')) and space (replace(' ','%20'))
@@ -145,7 +147,7 @@ def GoogleSearchFunction(isbn = None, title = None, author = None):
                         j = 0
                         while ((j < len(autGoogle)) and (AUTHORfound == False)):
                             
-                            if (autSearched == autGoogle[j].lower()):
+                            if (autSearchedInternal in autGoogle[j].lower()):
                                 AUTHORfound = True    
                                 
                                 #'industryIdentifiers' stands for ISBN_10, ISBN_13 or OtherID
@@ -177,17 +179,246 @@ def GoogleSearchFunction(isbn = None, title = None, author = None):
                                         
                             j += 1
 
-        return ISBNfound, [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, pubData, pubSearched, catSearched, descSearched]
+        return ISBNfound, [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, \
+                           pubData, pubSearched, catSearched, descSearched]
 
     except Exception as excp:
         raise Exception("There is un problem: ", excp)
 
 
 
+def GoogleSearch(f, SaveFileName, theColumns, ind_start, ind_end):
 
-    #'PLEADING GUILTY' found with ISBN: https://www.googleapis.com/books/v1/volumes?q=isbn:0671870432
+    NotFoubndBooks = 0    
+    pdT = pd.DataFrame(columns = theColumns)
 
-def GoogleSearch():
+    for i in range(0, ind_start): 
+        f.readline()
+        
+    csvLineParsed = ParserCsvInputBookCrossing(f.readline())
+    ret, refBook = GoogleSearchFunction(isbn = csvLineParsed[0])
+    pdT.loc[0] = refBook
+    pd.DataFrame(pdT.loc[0:1], columns = theColumns).to_csv(SaveFileName, sep = ';', index = False, mode = 'w')
+
+    savingRate = int(ind_end / 4)
+    #i doesn't start at 0 so that the trigger index 'len(pdT) - savingRate:len(pdT)+1' of save is correct
+    for i in range(1, ind_end):    
+        csvLineParsed = ParserCsvInputBookCrossing(f.readline())
+
+        ret = False
+        ret, refBook = GoogleSearchFunction(isbn = csvLineParsed[0])
+        
+        if (ret == False):
+            ret, refBook = GoogleSearchFunction(title = csvLineParsed[1], author = csvLineParsed[2].split(';')[-1])
+            
+        if (ret == False):
+            NotFoubndBooks += 1
+
+        pdT.loc[len(pdT)] = refBook
+        if (i % savingRate == 0):
+            pdT.loc[len(pdT) - savingRate:len(pdT)+1].to_csv(SaveFileName, sep = ';', index = False, mode = 'a', header = False)
+            #Google doesn't like when too much requests are performed...
+            time.sleep(10.0)
+    
+    return NotFoubndBooks
+
+
+
+def GoodReadsSearchFunction(isbn = None, title = None, author = None):
+    ''' Find information on internet about the book entered in function's arguments 
+        Either isbn = ..., Or title = ..., author = ... '''
+    
+    #3 kinds of books identifiers
+    ISBNdict = {"ISBN_10": 0, "ISBN_13": 0, "OtherID": 0}
+    
+    #all is reset
+    ISBNdict["ISBN_10"] = 0.0
+    ISBNdict["ISBN_13"] = 0.0   
+    ISBNdict["OtherID"] = 0.0
+    autGoodReads = ''
+    titleSearched = ''
+    autSearched = ''
+    pubSearched = ''
+    pubData = ''
+    catSearched = ''
+    descSearched = ''
+    awardsSearched = ''
+    languageSearched = ''
+    pagesSearched = 0
+    authorGenreSearched = ''
+    linksSeriesList = []
+
+    AUTHORfound = False
+    
+    if ((title != None) and (author != None)):
+        urlIdBookGoodReads_start = 'https://www.goodreads.com/search?utf8=%E2%9C%93&q='
+        urlIdBookGoodReads_end = '&search_type=books'
+        
+        titleSearched = title.encode('ascii', 'ignore').decode('ascii')
+        autSearched = author.encode('ascii', 'ignore').decode('ascii')
+        #We keep only the author familly name
+        autSearchedInternal = autSearched.lower().split()[-1]
+        
+        #First we have to find the book page: we need GoodReads identifier of the book 
+        bookUrlForSearch = urlIdBookGoodReads_start + titleSearched.replace(' ', '+') + '+' + autSearchedInternal.replace(' ', '+') + urlIdBookGoodReads_end
+        print(bookUrlForSearch)
+        sourceIdBookGoodReads = urlopen(bookUrlForSearch)
+        soupIdBookGoodReads = bs4.BeautifulSoup(sourceIdBookGoodReads, 'html.parser')
+        
+        #Search of the reference compliant with title and author provided, among all proposed books references
+        booksReference = soupIdBookGoodReads.find_all("a", class_="bookTitle")
+        print('booksReference ', booksReference)
+        j = 0
+        while ((j < len(booksReference)) and (AUTHORfound == False)):
+            autGoodReads = booksReference[j].find_next("a", class_="authorName").text
+            
+            if (autSearchedInternal in autGoodReads.lower()):
+                AUTHORfound  = True
+                print('autSearched *', autSearched, '*\n')
+            j += 1    
+        
+        #Now we go to the selected book's page
+        source = urlopen('https://www.goodreads.com' + booksReference[j-1]["href"]) 
+        soup = bs4.BeautifulSoup(source, 'html.parser')
+        titleSearched = soup.find("h1", id="bookTitle").text
+        titleSearched = titleSearched.replace('\n', '').strip()
+        print('titleSearched *', titleSearched, '*\n')
+        
+        #Search of ISBN (10 and / or 13), language and awards
+        searchForISBN_Lang_Awards_Series = soup.find("div", id="bookDataBox").find_all("div", class_="clearFloats")
+        for i in range(len(searchForISBN_Lang_Awards_Series)):
+    
+            if searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowTitle").text == 'ISBN':
+                isbnFull = searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowItem")
+                
+                #ISBN_10 and ISBN_13 are provided
+                if isbnFull.find("span", class_="greyText"):
+                    ISBNdict["ISBN_10"] = isbnFull.text.split(isbnFull.find("span", class_="greyText").text)
+                    ISBNdict["ISBN_10"] = ISBNdict["ISBN_10"][0].replace('\n', '').strip()
+                    print('ISBN 10 (avec span) *', ISBNdict["ISBN_10"], '*\n')
+                    ISBNdict["ISBN_13"] = isbnFull.find("span", class_="greyText").text
+                    ISBNdict["ISBN_13"] = ISBNdict["ISBN_13"].split('(ISBN13: ')[1].replace(")", '')
+                    print('ISBN 13 *', ISBNdict["ISBN_13"], '*\n')
+                #Only ISBN_10 is provided
+                else:
+                    ISBNdict["ISBN_10"] = isbnFull.text
+                    print('ISBN 10 (sans span) *', ISBNdict["ISBN_10"], '*\n')
+        
+            if searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowTitle").text == 'Edition Language':
+                languageSearched = searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowItem").text
+                print('languageSearched *', languageSearched, '*\n')
+        
+            if searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowTitle").text == 'Literary Awards':
+                awardsSearched = searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowItem").text
+                print('awardsSearched *', awardsSearched, '*\n')
+                
+        #Search of published date and publisher       
+        searchForPublished = soup.find("div", id="details").find_all("div", class_="row")
+        for i in range(len(searchForPublished)):
+            if 'Published' in searchForPublished[i].text:
+                
+                #Current published date and additional information on first publication date is also provided
+                if (searchForPublished[i].find("nobr", class_="greyText")):
+                    infoFirstPublished = searchForPublished[i].find("nobr", class_="greyText")
+                    tempPublished = searchForPublished[i].text.split(infoFirstPublished.text)
+                    tempPublished = tempPublished[0].strip().replace('\n', '').replace('Published', '').split('by')
+                    pubData = tempPublished[0].strip()
+                    pubSearched = tempPublished[1].strip()
+                    print('pubData: (avec first)*', pubData, '*\n')
+                    print('pubSearched: *', pubSearched, '*\n')
+                #Only current published date is provided
+                else:
+                    tempPublished = searchForPublished[i].text.strip().replace('\n', '').replace('Published', '').split('by')
+                    pubData = tempPublished[0].strip()
+                    pubSearched = tempPublished[1].strip()
+                    print('pubData: *', pubData, '*\n')
+                    print('pubSearched: *', pubSearched, '*\n')
+    
+        #Search of the pages number
+        searchForPages = soup.find("div", id="details").find_all("div", class_="row")
+        for i in range(len(searchForPages)):
+            if 'pages' in searchForPages[i].text:
+                pagesSearched = searchForPublished[i].text
+                pagesSearched = pagesSearched.split(',')[1].split('pages')[0].strip()
+                print('pagesSearched *', pagesSearched, '*\n')
+    
+        #Search for the book's genre
+        if (soup.find("a", class_="actionLinkLite bookPageGenreLink")):
+            catSearched = soup.find_all("a", class_="actionLinkLite bookPageGenreLink")[0].text
+            print('catSearched *', catSearched, '*\n')
+        
+        #Search for knowing if book is part of a serie
+        #=> If yes, we keep the URL of the other mentionned books of the serie
+        if soup.find("div", class_="seriesList"):
+            if (soup.find("div", class_="seriesList").find_next("h2").text == 'Other books in the series'):
+                #We go to this specific book serie web page
+                linkTowardSeries = soup.find("div", class_="seriesList").find_next("h2").find_next("a")["href"]
+                r = requests.get('https://www.goodreads.com' + linkTowardSeries)
+                
+                #We keep all the other boks reference of this serie
+                seriesList = re.findall('href="/book/show/[0-9]+', str(r.content))
+                linksSeriesList = [seriesList[i].replace('href="', 'https://www.goodreads.com') for i in range(len(seriesList)) if i%2 == 0]
+                print(linksSeriesList, len(linksSeriesList))
+
+        #search of the author genre: we need to finf the URL of author page first
+        sourceAuthor = urlopen(soup.find("a", class_="authorName")["href"])
+        soupAuthor = bs4.BeautifulSoup(sourceAuthor, 'html.parser')
+        
+        #On the author web site page, we search for the author genre
+        searchForAuthorGenre = soupAuthor.find_all("div", class_="dataTitle")
+        for i in range(len(searchForAuthorGenre)):
+            if (searchForAuthorGenre[i].text == "Genre"):
+                authorGenreSearched = searchForAuthorGenre[i].find_next("div", class_="dataItem").text.split(',')[0]
+                authorGenreSearched = authorGenreSearched.replace('\n', '').strip()
+                print('authorGenreSearched *', authorGenreSearched, '*\n')    
+
+    return [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, \
+            pubData, pubSearched, catSearched, descSearched, languageSearched, awardsSearched, pagesSearched, \
+            authorGenreSearched, linksSeriesList]
+    
+    
+
+def GoodReadsSearch(f, SaveFileName, theColumns, ind_start, ind_end):
+
+    NotFoubndBooks = 0    
+    pdT = pd.DataFrame(columns = theColumns)
+
+    for i in range(0, ind_start): 
+        f.readline()
+    
+    print("1ier livre recherche")    
+    csvLineParsed = ParserCsvInputBookCrossing(f.readline())
+    refBook = GoodReadsSearchFunction(title = csvLineParsed[1], author = csvLineParsed[2].split(';')[-1])
+    pdT.loc[0] = refBook
+    pd.DataFrame(pdT.loc[0:1], columns = theColumns).to_csv(SaveFileName, sep = ';', index = False, mode = 'w')
+
+    savingRate = int(ind_end / 4)
+    #i doesn't start at 0 so that the trigger index 'len(pdT) - savingRate:len(pdT)+1' of save is correct
+    for i in range(1, ind_end):  
+        print("livre n°%d recherche" % int(i+1))
+        csvLineParsed = ParserCsvInputBookCrossing(f.readline())
+
+#        ret = False
+#        ret, refBook = GoogleSearchFunction(isbn = csvLineParsed[0])
+        refBook = GoodReadsSearchFunction(title = csvLineParsed[1], author = csvLineParsed[2].split(';')[-1])
+        
+#        if (ret == False):
+#            ret, refBook = GoogleSearchFunction(title = csvLineParsed[1], author = csvLineParsed[2].split(';')[-1])
+            
+#        if (ret == False):
+#            NotFoubndBooks += 1
+
+        pdT.loc[len(pdT)] = refBook
+        if (i % savingRate == 0):
+            pdT.loc[len(pdT) - savingRate:len(pdT)+1].to_csv(SaveFileName, sep = ';', index = False, mode = 'a', header = False)
+            #Google doesn't like when too much requests are performed...
+            time.sleep(10.0)
+    
+    return NotFoubndBooks
+
+
+    
+if __name__ == "__main__":
 #Example of Google Requests:
 ############################
     #'Classical Mythology' found with ISBN - no subtitle - ISBN found: https://www.googleapis.com/books/v1/volumes?q=isbn:0195153448
@@ -209,143 +440,58 @@ def GoogleSearch():
     #Exception: ('There is un problem: ', UnicodeEncodeError('ascii', 'GET /books/v1/volumes?q=title:Die%20Mars-%20Chroniken.%20Roman%20in%20Erz?¤hlungen. HTTP/1.1', 74, 75, 'ordinal not in range(128)'))
     #=> The solutyion is title.encode('ascii', 'ignore').decode('ascii') = Die Mars- Chroniken. Roman in Erz?hlungen
 
+    #'PLEADING GUILTY' found with ISBN: https://www.googleapis.com/books/v1/volumes?q=isbn:0671870432
+    
+#Search result
+############################
+#    googleColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', 'Year-Of-Publication', 'Publisher', 'Category', 'Description']
+#    SaveFileName = cheminGoogleBooks + 'GoggleBooks_InternetSearch_06_03_2021.csv'
+#
+#    #List of books to search on Google
+#    f = open(cheminBookCrossing + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="replace")
+#    f.readline()
+#    
+#    #Google search function
+#    NotFoubndBooks = GoogleSearch(f, SaveFileName, googleColumns, 0, 10) 
+#
+#    print("Not found books: %d" % NotFoubndBooks)
+#    f.close()   
+    
+    
+#Example of GoodReads Requests:
+############################
+    #Direct search on the GoodReads web site with title 'Jane Doe' and author name 'Kaiser'
+    #=> the URL used it then: 'https://www.goodreads.com/search?utf8=%E2%9C%93&q=jane+doe+kaiser&search_type=books'
 
-#Internet search:
-#################
-    #extraitFch = pd.read_csv(chemin + 'Extrait1000_BX-Books.csv', nrows = 32, delimiter = ';', header = 0)
-    #ligne 33 pose problème à l'ouverture: encoding utf-32 marche encore moins bien que l'encoding par défaut
+    #On the html code of the previous direct search, there are: <div id="1730953" and <div id="9675352" 
+    #=> It's GoodReads book's identifiers 
+
+    #=> Then with the following request, we are on the book web page : 'https://www.goodreads.com/book/show/1730953'
     
-    SaveFileName = 'GoggleBooks_InternetSearch_05_03_2021.csv'
+    #Example of book with 'Literary Awards': The Millionaire Next Door: The Surprising Secrets of America's Wealthy 
+    #=> 'https://www.goodreads.com/book/show/998'
+
+    #Example of book inside a serie: Asterix the Gaul
+    #=> direct serach: https://www.goodreads.com/search?utf8=%E2%9C%93&search%5Bquery%5D=asterix+the+gaulois&commit=Search&search_type=books
+    #=> URL of GoodReads book's page: 'https://www.goodreads.com/book/show/71292'
     
+#Search result
+############################
+    goodreadsColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', \
+                        'Year-Of-Publication', 'Publisher', 'Category', 'Description', 'Language', 'Awards', 'Pages', \
+                        "Author's genre", 'Same serie']
+    SaveFileName = cheminGoodReads + 'GoodreadsBooks_InternetSearch_06_03_2021.csv'
+
+    #List of books to search on Google
     f = open(cheminBookCrossing + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="replace")
     f.readline()
     
-    NotFoubndBooks = 0    
-    theColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', 'Year-Of-Publication', 'Publisher', 'Category', 'Description']
-    pdT = pd.DataFrame(columns = theColumns)
+    #Google search function
+#    NotFoubndBooks = GoodReadsSearch(f, SaveFileName, goodreadsColumns, 0, 10) 
+    GoodReadsSearch(f, SaveFileName, goodreadsColumns, 1, 5) 
 
-    csvLineParsed = ParserCsvInputBookCrossing(f.readline())
-    ret, refBook = GoogleSearchFunction(isbn = csvLineParsed[0])
-    pdT.loc[0] = refBook
-    pd.DataFrame(pdT.loc[0:1], columns = theColumns).to_csv(cheminGoogleBooks + SaveFileName, sep = ';', index = False, mode = 'w')
-
-#    for i in range(1, 175): 
-#        f.readline()
-        
-    savingRate = 5   
-    for i in range(1, 10):    
-        csvLineParsed = ParserCsvInputBookCrossing(f.readline())
-
-        ret = False
-        ret, refBook = GoogleSearchFunction(isbn = csvLineParsed[0])
-        
-        if (ret == False):
-            ret, refBook = GoogleSearchFunction(title = csvLineParsed[1], author = csvLineParsed[2].split(';')[-1])
-            
-        if (ret == False):
-            NotFoubndBooks += 1
-
-        pdT.loc[len(pdT)] = refBook
-        if (i % savingRate == 0) and (i != 0):
-            pdT.loc[len(pdT) - savingRate:len(pdT)+1].to_csv(cheminGoogleBooks + SaveFileName, sep = ';', index = False, mode = 'a', header = False)
-            time.sleep(10.0)
-    
-    print("Not found books: %d" % NotFoubndBooks)
-    f.close()
-
-
-def GoodReadsSearchFunction():
-#Example of Google Requests:
-############################
-    #recherche avec le titre 'Jane Doe' et le nom de l'auteur 'Kaiser'
-#    r = requests.get('https://www.goodreads.com/search?utf8=%E2%9C%93&q=jane+doe+kaiser&search_type=books')
-#    print(r.content, type(r))
-#    with open('D:/DocsDeCara/Boulot/IA_ML/DSTI/Programme/ML_with_Python/Projet/Donnees/GoodReads/urlRecupereee.txt', "wb") as f:				#il faut ouvrir au format binaire
-#        f.write(r.content)
-
-    #Dedans il y a <div id="1730953" et <div id="9675352" qui indique les identifiants Good Reads pour ces livres
-    #=> il y a 2 autres <div id="... mais ce ne sont pas des chiffres qui suivents derrière
-    
-    #Ensuite si on fait : 'https://www.goodreads.com/book/show/1730953', on va sur la page du livre
-    
-    #Jane Doe: 'https://www.goodreads.com/book/show/1730953'
-#    source = urlopen('https://www.goodreads.com/book/show/1730953') 
-    
-    #Book with 'Literary Awards': The Millionaire Next Door: The Surprising Secrets of America's Wealthy 
-#    source = urlopen('https://www.goodreads.com/book/show/998') 
-
-#Internet search:
-############################
-    #Books in Series: Asterix The Gaulois
-    source = urlopen('https://www.goodreads.com/book/show/71292') 
-    
-#    r = requests.get('https://www.goodreads.com/book/show/71292')
-#    with open(cheminGoodReads + 'Asterix_PageLivreRecupereee.txt', "wb") as f:				#il faut ouvrir au format binaire
-#        f.write(r.content)    
-    
-    soup = bs4.BeautifulSoup(source, 'html.parser')
-    print(soup.find("h1", id="bookTitle").text)
-    
-    print(soup.find("a", class_="authorName").find("span", itemprop="name").text)
-#    r = requests.get(soup.find("a", class_="authorName")["href"])
-#    with open(cheminGoodReads + 'authorAsterix_PageRecupereee.txt', "wb") as f:				#il faut ouvrir au format binaire
-#        f.write(r.content)    
-    sourceAuthor = urlopen(soup.find("a", class_="authorName")["href"])
-    soupAuthor = bs4.BeautifulSoup(sourceAuthor, 'html.parser')
-    
-    searchForAuthorGenre = soupAuthor.find_all("div", class_="dataTitle")
-    for i in range(len(searchForAuthorGenre)):
-        if (searchForAuthorGenre[i].text == "Genre"):
-            print(searchForAuthorGenre[i].find_next("div", class_="dataItem").text.split(',')[0])
-    
-    searchForISBN_Lang_Awards_Serires = soup.find("div", id="bookDataBox").find_all("div", class_="clearFloats")
-    for i in range(len(searchForISBN_Lang_Awards_Serires)):
-
-        if searchForISBN_Lang_Awards_Serires[i].find("div", "infoBoxRowTitle").text == 'ISBN':
-            isbnFull = searchForISBN_Lang_Awards_Serires[i].find("div", "infoBoxRowItem")
-            
-            if isbnFull.find("span", class_="greyText"):
-                print(isbnFull.text.split(isbnFull.find("span", class_="greyText").text))
-                print(isbnFull.find("span", class_="greyText").text)
-    
-        if searchForISBN_Lang_Awards_Serires[i].find("div", "infoBoxRowTitle").text == 'Edition Language':
-            print(searchForISBN_Lang_Awards_Serires[i].find("div", "infoBoxRowItem").text)
-    
-        if searchForISBN_Lang_Awards_Serires[i].find("div", "infoBoxRowTitle").text == 'Literary Awards':
-            print(searchForISBN_Lang_Awards_Serires[i].find("div", "infoBoxRowItem").text)
-            
-           
-    searchForPublished = soup.find("div", id="details").find_all("div", class_="row")
-    for i in range(len(searchForPublished)):
-        if 'Published' in searchForPublished[i].text:
-            
-            if (searchForPublished[i].find("nobr", class_="greyText")):
-                infoFirstPublished = searchForPublished[i].find("nobr", class_="greyText")
-                tempPublished = searchForPublished[i].text.split(infoFirstPublished.text)
-                print(tempPublished[0].strip().replace('\n', '').replace('Published', '').split('by'))
-            else:
-                print(searchForPublished[i].text.strip().replace('\n', '').replace('Published', '').split('by'))
-
-    searchForPages = soup.find("div", id="details").find_all("div", class_="row")
-    for i in range(len(searchForPages)):
-        if 'pages' in searchForPages[i].text:
-            print(searchForPublished[i].text)
-
-    print(soup.find_all("a", class_="actionLinkLite bookPageGenreLink")[0].text)
-    
-    if soup.find("div", class_="seriesList").find_next("h2").text == 'Other books in the series':
-        linkTowardSeries = soup.find("div", class_="seriesList").find_next("h2").find_next("a")["href"]
-        
-        r = requests.get('https://www.goodreads.com' + linkTowardSeries)
-        seriesList = re.findall('href="/book/show/[0-9]+', str(r.content))
-        linksSeriesList = [seriesList[i].replace('href="', 'https://www.goodreads.com') for i in range(len(seriesList)) if i%2 == 0]
-        print(linksSeriesList, len(linksSeriesList))
-    
-    
-    
-if __name__ == "__main__":
-    GoogleSearch()    
-    GoodReadsSearchFunction()
+#    print("Not found books: %d" % NotFoubndBooks)
+    f.close()   
 
 
  
