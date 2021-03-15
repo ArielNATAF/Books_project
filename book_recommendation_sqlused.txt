@@ -1,0 +1,675 @@
+--------------------------------------SQL used for ETLing the data------------------------------
+Tables Lists--
+1.	tt_master_book
+2.	tt_user
+3.	tt_rating
+4.	tt_tag
+5.	tt_book_tag
+
+--------------
+# tt_read table need to work on that
+--------------
+source table used tt_master_book
+--[dbo].[tt_book_book_crossing]
+--[dbo].[tt_book_goodbooks]
+--[dbo].[tt_book_goodreads_dumps1]
+--[dbo].[tt_book_goodreads_final]
+
+source table used tt_rating
+--[dbo].[tt_rating_book_crossing]
+--[dbo].[tt_rating_goodbooks]
+
+source table used tt_user
+--[dbo].[tt_user_goodbooks]
+--[dbo].[tt_user_book_crossing]
+------------------------------------
+
+
+-----------------------------Data Cleaning ------------------------
+
+
+---------- Finding and removing the records which incorrect ISBN------------
+ SELECT ISBN,*
+from tt_book_book_crossing where ISBN not like '[0-9]%'
+--"0486404242
+
+delete from tt_book_book_crossing where book_id=384192
+
+
+---------- Removing the records which has blank title------------
+delete from tt_book_goodreadsfinal where refrence_book_id is null 
+
+------------------------
+
+
+---------- Removing the records which has book_title issues ------------
+delete from tt_book_goodreads_dumps1 where isbn is null  and isbn_13 is null 
+and title not like '%[A-Z]'
+and title not like '%[0-9]'
+and title like 'Ã%'
+ 
+ delete from tt_book_goodreads_dumps1 where isbn is null  and isbn_13 is null 
+and title like 'Ã%'
+and original_title like 'Ã%'
+
+---------- Updating the Title with correct title ------------
+update  tt_book_goodreads_dumps1 set title=original_title 
+where isbn is null  and isbn_13 is null 
+and title like 'Ã%'
+and original_title like '%Ã%'
+ 
+---------- Removing the records which has book_title issues ------------
+delete from tt_book_goodreads_dumps1 where isbn is null  and isbn_13 is null 
+and title like 'Ã%'
+and original_title is null
+
+---------- Updating the Title with correct title ------------
+update  tt_book_goodreads_dumps1 set title=original_title 
+where isbn is null  and isbn_13 is null 
+and title like 'Ã%'
+
+---------- Updating the Title with blank which has issues ------------
+update  tt_book_goodreads_dumps1 set title='', original_title='' 
+where  title like 'Ã%' and  title like 'Ã%' and 
+  original_title like 'Ã%' and  original_title like 'Ã%'
+
+---------- Updating the Title with blank which has issues ------------
+ update  tt_book_goodreads_dumps1 set title='' 
+where   title like 'Ã%' and  title like 'Ã%'
+ and original_title is null
+ 
+ 
+
+ ---------- Trimming the blank space in varchar columns ------------
+ update tt_book_book_crossing set book_title=ltrim(rtrim(book_title)),
+book_author=ltrim(rtrim(book_author)),
+ISBN=ltrim(rtrim(ISBN))
+ 
+ update tt_book_goodbooks set title=ltrim(rtrim(title)),
+original_title=ltrim(rtrim(original_title)),
+book_author=ltrim(rtrim(book_author)),
+ISBN=ltrim(rtrim(ISBN))
+
+update tt_book_goodreads_dumps1 set title=ltrim(rtrim(title)),
+original_title=ltrim(rtrim(original_title)),
+book_author=ltrim(rtrim(book_author)),
+ISBN=ltrim(rtrim(ISBN)),
+asin=ltrim(rtrim(asin)),
+ISBN_13=ltrim(rtrim(ISBN_13)),
+year_of_publication=ltrim(rtrim(year_of_publication)),
+genre_and_votes=ltrim(rtrim(genre_and_votes)),
+awards=ltrim(rtrim(awards)),
+book_description=ltrim(rtrim(book_description)),
+books_in_series=ltrim(rtrim(books_in_series))
+
+
+update tt_book_goodreadsfinal set book_title=ltrim(rtrim(book_title)),
+book_author=ltrim(rtrim(book_author)),
+genre_1=ltrim(rtrim(genre_1)),
+ISBN=ltrim(rtrim(ISBN)),
+genre_2=ltrim(rtrim(genre_2)),
+author_gender=ltrim(rtrim(author_gender)),
+author_birthplace=ltrim(rtrim(author_birthplace)),
+ISBN_13=ltrim(rtrim(ISBN_13)),
+year_of_publication=ltrim(rtrim(year_of_publication)),
+author_genres=ltrim(rtrim(author_genres))
+----------------------------------
+
+
+ ---------- Deleting the Duplicate Records ------------
+delete from tt_book_book_crossing where book_id in
+(
+select max(book_id) from tt_book_book_crossing group by isbn having count(*)>1
+)
+
+
+
+ ---------- Inserting into master table ------------
+insert into tt_master_book(book_title,book_author,isbn,year_of_publication)
+select book_title, book_author, ISBN, year_of_publication from tt_book_book_crossing
+
+ ---------- Updating the Matching records from tt_book_goodbooks ------------
+ update t1 set t1.title=t2.book_title, t1.original_title=t2.book_title, t1.book_author=t2.book_author
+ from tt_book_goodbooks t1 inner join tt_master_book t2 on t1.isbn=t2.isbn
+
+ ---------- Removing the Existing records ------------
+delete from tt_master_book where isbn in
+(
+ select isbn from tt_book_goodbooks 
+ )
+
+ ---------- Updating the ISBN_13 with NULL for varchar values ------------
+update tt_book_goodbooks set ISBN_13=null  where isbn_13 like '%[A-Z]%'
+
+ ---------- Updating the records for blank values ------------
+update  tt_book_goodbooks  set title=original_title where title is null
+
+ ---------- Inserting into master table ------------
+   SET ANSI_WARNINGS  OFF;
+insert into tt_master_book(book_title,book_author,isbn,isbn_13,year_of_publication,book_language,average_rating
+)
+select title,book_author,ISBN,ISBN_13,year_of_publication,language_code,average_rating
+from tt_book_goodbooks
+  SET ANSI_WARNINGS  ON;
+
+ ---------- Trimming the blank space in varchar columns ------------
+update  tt_book_goodreadsfinal set book_title=ltrim(rtrim(book_title)),
+book_author=ltrim(rtrim(book_author)),
+genre_1=ltrim(rtrim(genre_1)),
+genre_2=ltrim(rtrim(genre_2)),
+author_gender=ltrim(rtrim(author_gender)),
+author_birthplace=ltrim(rtrim(author_birthplace)),
+year_of_publication=ltrim(rtrim(year_of_publication)),
+author_genres=ltrim(rtrim(author_genres))
+
+---
+
+ ---------- removing duplicates ------------
+delete from tt_book_goodreadsfinal where book_id not in
+(
+select min(book_id) from tt_book_goodreadsfinal group by refrence_book_id,book_title --having count(*)>1
+)
+
+
+delete from tt_book_goodreadsfinal where book_id in(
+9910,9265,18070,3253,8320,8874,11948,12590,23018
+)
+
+ ---------- Updating the int column ------------
+update tt_book_goodreadsfinal set year_of_publication= null where year_of_publication not like '%[0-9]%'
+
+update tt_book_goodreadsfinal set year_of_publication2=right(year_of_publication,4) 
+
+update tt_book_goodreadsfinal set year_of_publication=null where right(year_of_publication,4) like '%[A-Z]%'
+
+update tt_book_goodreadsfinal set book_title=null where book_title not like '[a-zA-Z0-9#.'']%'
+
+
+ ---------- Updating records has issues ------------
+update tt_book_goodreadsfinal set book_title =null where book_id in(
+3218,3220,3237
+,3246,3251,3255,3263,3674,3814,4567,5352,5634,9223,9908
+,9955,9967,9985,9991,10000,10003,10007,10104,10269,10717,10751,11125,11139
+,11255,12507,12509,12550,12584,16631,18069,20211,20217,20236,21989
+,22015,22885,22949,22950,22951,22952,22957,22958,22965,22968,22969,22982
+,22987,22988,22994,22999,23008,23009,23010,23012,23013,23022,23032)
+
+
+ ---------- Removing records has issues ------------
+delete
+from tt_book_goodreadsfinal where book_title like '%[Ø­]%' and book_author like '%Ø­%'
+
+
+ ---------- Removing records has issues ------------
+select * from tt_book_goodreadsfinal where book_id not in(
+select book_id,*
+from tt_book_goodreadsfinal where book_title like '%[Ø­]%'
+and book_title  not like '%[A-Za-z0-9]'
+
+delete from tt_book_goodreadsfinal where book_id in(
+3256,5356,12495,20213,20216,20225,22872,22918,22946,22960,22973
+)
+
+ ---------- Removing records has title blank ------------
+delete from tt_book_goodreads_dumps1 where  title=''
+
+
+ ---------- Updating/Fixing  records has issues with book_title ------------
+select book_id,title,original_title
+from tt_book_goodreads_dumps1 where title not like '%[ÅÃãµ¥£§Š¤º¶]%' and original_title like '%[ÅÃãµ¥£§Š¤º¶]%'
+
+update tt_book_goodreads_dumps1 set original_title=title
+where title not like '%[ÅÃãµ¥£§Š¤º¶]%' and original_title like '%[ÅÃãµ¥£§Š¤º¶]%'
+
+
+select book_id,title,original_title
+from tt_book_goodreads_dumps1 where original_title not like '%[ÅÃãµ¥£§Š¤º¶]%' and title like '%[ÅÃãµ¥£§Š¤º¶]%'
+
+update tt_book_goodreads_dumps1 set title=original_title
+where original_title not like '%[ÅÃãµ¥£§Š¤º¶]%' and title like '%[ÅÃãµ¥£§Š¤º¶]%'
+
+select  a.book_id,b.book_id,a.book_title,b.title,b.original_title,a.book_author,b.book_author from tt_master_book a
+inner join tt_book_goodreads_dumps1 b on a.isbn=b.isbn
+where a.book_title  like '%[ÅÃãµ¥£§Š¤º¶]%'
+and (b.title not like '%[ÅÃãµ¥£§Š¤º¶]%' or b.original_title not like '%[ÅÃãµ¥£§Š¤º¶]%')
+
+update a set a.book_title=b.title
+from tt_master_book a
+inner join tt_book_goodreads_dumps1  b on a.isbn=b.isbn
+where a.book_title  like '%[ÅÃãµ¥£§Š¤º¶]%'
+and (b.title not like '%[ÅÃãµ¥£§Š¤º¶]%' or b.original_title not like '%[ÅÃãµ¥£§Š¤º¶]%')
+
+select  a.book_id,b.book_id,a.book_title,b.title,b.original_title,a.book_author,b.book_author from tt_master_book a
+inner join tt_book_goodreads_dumps1 b on a.isbn=b.isbn
+where a.book_title  not like '%[ÅÃãµ¥£§Š¤º¶]%'
+and (b.title  like '%[ÅÃãµ¥£§Š¤º¶]%' or b.original_title  like '%[ÅÃãµ¥£§Š¤º¶]%')
+
+update a set a.title =b.book_title, a.original_title =b.book_title
+from tt_book_goodreads_dumps1 a
+inner join tt_master_book  b on a.isbn=b.isbn
+where b.book_title  not like '%[ÅÃãµ¥£§Š¤º¶]%'
+and (a.title  like '%[ÅÃãµ¥£§Š¤º¶]%' or a.original_title  like '%[ÅÃãµ¥£§Š¤º¶]%')
+
+
+ select  a.book_id,b.book_id,a.book_title,b.title,b.original_title,a.book_author,b.book_author 
+from tt_master_book a
+inner join tt_book_goodreads_dumps1 b on a.isbn=b.isbn
+where a.book_author like '%[ÅÃãµ¥£§Š¤º¶]%'
+and b.book_author not like  '%[ÅÃãµ¥£§Š¤º¶]%'
+
+update a set a.book_author=b.book_author
+from tt_master_book a
+inner join tt_book_goodreads_dumps1 b on a.isbn=b.isbn
+where a.book_author like '%[ÅÃãµ¥£§Š¤º¶]%'
+and b.book_author not like  '%[ÅÃãµ¥£§Š¤º¶]%'
+ 
+ select  a.book_id,b.book_id,a.book_title,b.title,b.original_title,a.book_author,b.book_author 
+from tt_master_book a
+inner join tt_book_goodreads_dumps1 b on a.isbn=b.isbn
+where a.book_author not like '%[ÅÃãµ¥£§Š¤º¶]%'
+and b.book_author like  '%[ÅÃãµ¥£§Š¤º¶]%'
+
+update b set b.book_author=a.book_author
+from tt_master_book a
+inner join tt_book_goodreads_dumps1 b on a.isbn=b.isbn
+where a.book_author not like '%[ÅÃãµ¥£§Š¤º¶]%'
+and b.book_author like  '%[ÅÃãµ¥£§Š¤º¶]%'
+
+select * from tt_book_goodreads_dumps1 where title  like '%[ÅÃãµ¥£§Š¤º¶]%' and ISBN is null
+delete from tt_book_goodreads_dumps1 where book_id in(52246,48370,50185,40186,19068,34140)
+
+update tt_book_goodreads_dumps1 set issue_flag=1, is_active=0  where title  like '%[ÅÃãµ¥£§Š¤º¶]%'
+update tt_book_goodreads_dumps1 set issue_flag=0, is_active=1  where title  not like '%[ÅÃãµ¥£§Š¤º¶]%'
+
+select * from tt_master_book where book_title like '%[ÅÃãµ¥£§Š¤º¶]%'
+
+
+ ---------- Applying the Logic of is_active flag column ------------
+update tt_master_book set issue_flag=1, is_active=0 where book_title like '%[ÅÃãµ¥£§Š¤º¶]%'
+
+ 
+update tt_master_book set issue_flag=0, is_active=1 where book_title not like '%[ÅÃãµ¥£§Š¤º¶]%'
+
+
+select * from tt_book_goodreads_dumps1 where isbn in(
+select distinct isbn from tt_master_book where isbn is not null
+)
+and is_active =0
+
+ ---------- Setting the is_active flag 0 for existing records ------------
+update tt_book_goodreads_dumps1 set is_active=0 where isbn in
+(
+select distinct isbn from tt_master_book where isbn is not null
+)
+and is_active =1
+
+ ---------- correcting the int columns ------------
+select * from tt_book_goodreads_dumps1 where right(year_of_publication,4) like '%[A-Za-z]%'
+update tt_book_goodreads_dumps1 set year_of_publication = null where right(year_of_publication,4) like '%[A-Za-z]%'
+
+ ---------- converting from varchar to the int columns ------------
+update tt_book_goodreads_dumps1 set year_of_publication2=right(year_of_publication,4)
+
+ ---------- Inserting/Updating into master table ------------
+   SET ANSI_WARNINGS  OFF;
+insert into tt_master_book(book_title,book_author,isbn,isbn_13,year_of_publication,books_in_series,average_rating,awards,book_description,issue_flag,is_active,data_source)
+select title,book_author,ISBN,ISBN_13,year_of_publication2,books_in_series,average_rating,awards,book_description, 0 as issue_flag,1 as is_active,
+'goodreads' as data_source
+from tt_book_goodreads_dumps1
+where is_active=1
+   SET ANSI_WARNINGS  ON;
+
+
+update a set a.year_of_publication=b.year_of_publication2
+from tt_master_book a inner join tt_book_goodreads_dumps1 b on a.isbn=b.isbn
+where b.is_active=0 and b.issue_flag=0
+and b.year_of_publication2 is not null
+
+
+update a set a.isbn_13=b.isbn_13,a.average_rating=b.average_rating,a.awards=b.awards,a.book_description=b.book_description,
+a.number_of_pages=b.number_of_pages
+from tt_master_book a inner join tt_book_goodreads_dumps1 b on a.isbn=b.isbn
+where b.is_active=0 and b.issue_flag=0
+
+
+select a.book_title, b.book_title, a.number_of_pages, b.number_of_pages, a.year_of_publication, b.year_of_publication2,a.average_rating, b.average_rating,
+a.author_genres, b.author_genres
+from tt_master_book a
+inner join tt_book_goodreadsfinal b on a.book_title=b.book_title and a.book_author=b.book_author
+where a.is_active=1 and b.is_active=1 and a.number_of_pages is null
+
+Update a set a.number_of_pages = b.number_of_pages
+from tt_master_book a
+inner join tt_book_goodreadsfinal b on a.book_title=b.book_title and a.book_author=b.book_author
+where a.is_active=1 and b.is_active=1 and a.number_of_pages is null
+
+
+Update a set a.average_rating = b.average_rating
+from tt_master_book a
+inner join tt_book_goodreadsfinal b on a.book_title=b.book_title and a.book_author=b.book_author
+where a.is_active=1 and b.is_active=1 and a.average_rating is null
+
+
+Update a set a.author_genres = b.author_genres
+from tt_master_book a
+inner join   b on a.book_title=b.book_title and a.book_author=b.book_author
+where a.is_active=1 and b.is_active=1
+
+
+ ---------- Applying the logic for data_source column to trace any future issues ------------
+update tt_master_book set data_source='book_crossing' 
+from tt_master_book
+inner join tt_book_book_crossing 
+on tt_book_book_crossing.isbn= tt_master_book.isbn
+
+
+select tt_master_book.* from tt_master_book inner join tt_book_goodreads_dumps1
+on tt_master_book.isbn=tt_book_goodreads_dumps1.isbn
+where data_source is null
+
+update tt_master_book set data_source='goodreads' from  tt_master_book inner join tt_book_goodreads_dumps1
+on tt_master_book.isbn=tt_book_goodreads_dumps1.isbn
+where data_source is null
+
+select tt_master_book.* from tt_master_book inner join tt_book_goodreads_dumps1
+on tt_master_book.isbn=tt_book_goodreads_dumps1.isbn
+where data_source ='book_crossing'
+
+update tt_master_book set data_source='book_crossing and goodreads' from  tt_master_book inner join tt_book_goodreads_dumps1
+on tt_master_book.isbn=tt_book_goodreads_dumps1.isbn
+where data_source ='book_crossing'
+
+
+select  tt_master_book.data_source from tt_master_book inner join tt_book_goodbooks
+on tt_master_book.isbn=tt_book_goodbooks.isbn
+where data_source is null
+
+update tt_master_book set data_source='goodbooks' from  tt_master_book inner join tt_book_goodbooks
+on tt_master_book.isbn=tt_book_goodbooks.isbn
+where data_source is null
+
+
+select   tt_master_book.data_source from tt_master_book inner join tt_book_goodbooks
+on tt_master_book.isbn=tt_book_goodbooks.isbn
+where data_source ='book_crossing'
+
+update tt_master_book set data_source='book_crossing and goodbooks' from  tt_master_book inner join tt_book_goodbooks
+on tt_master_book.isbn=tt_book_goodbooks.isbn
+where data_source ='book_crossing'
+
+
+select   tt_master_book.data_source from tt_master_book inner join tt_book_goodbooks
+on tt_master_book.isbn=tt_book_goodbooks.isbn
+where data_source ='goodreads'
+
+update tt_master_book set data_source='goodreads and goodbooks' from  tt_master_book inner join tt_book_goodbooks
+on tt_master_book.isbn=tt_book_goodbooks.isbn
+where data_source ='goodreads'
+
+
+select   tt_master_book.data_source from tt_master_book inner join tt_book_goodbooks
+on tt_master_book.isbn=tt_book_goodbooks.isbn
+where data_source ='book_crossing and goodreads'
+
+update tt_master_book set data_source='book_crossing and goodreads and goodbooks' from  tt_master_book inner join tt_book_goodbooks
+on tt_master_book.isbn=tt_book_goodbooks.isbn
+where data_source ='book_crossing and goodreads'
+
+
+
+ ---------- Working on tt_user ------------
+
+
+ ---------- Inserting into tt_user_book_crossing table ------------
+insert into  tt_user_book_crossing (refrence_user_id, first_name, last_name, age, Location)
+select User_ID, 'John' as first_name, 'Doe' as last_name, CONVERT(int, Age) as Age, Location  
+from book_crossing_user
+
+
+create table tt_rating_book_crossing(
+	rating_id int IDENTITY(1,1) PRIMARY KEY,
+	book_id int,
+	user_id int,
+	rating int,
+	is_active bit
+);
+
+
+ ---------- Resolving Location column issues ------------
+select * from tt_user_book_crossing where location not like '%,%,%'
+
+update tt_user_book_crossing set is_active=0 where location not like '%,%,%'
+
+
+ ---------- Inserting into main table: tt_user ------------
+insert into [dbo].[tt_user] (first_name, last_name, birth_year, gender, city, state, country,is_active)
+select first_name, last_name, 
+case when birth_year=2004 and age=0 Then 0 else birth_year end as birth_year, 
+'Not Specified' as gender, 
+Trim(SUBSTRING(location,1,CHARINDEX( ',',Location, 1)-1)) AS city,
+trim(SUBSTRING(location, CHARINDEX( ',',Location, 1)+1, (CHARINDEX( ',',Location, (CHARINDEX( ',',Location, 1))+1)-CHARINDEX(',',Location, 1)-1))) AS state,
+Trim(SUBSTRING(Location, CHARINDEX( ',',Location, CHARINDEX( ',',Location, 1)+1)+1, LEN(Location)-CHARINDEX( ',',Location, CHARINDEX( ',',Location, 1)+1))) AS country,
+1 as is_active
+from tt_user_book_crossing
+where is_active is null
+
+
+ ---------- Inserting into tt_rating_book_crossing ------------
+
+insert into tt_rating_book_crossing(book_id, ISBN, user_id, rating, is_active)
+select a.book_id,a.ISBN, c.user_id,b.Book_Rating,c.is_active  from tt_book_book_crossing a inner join book_crossing_rating1 b
+on a.isbn=b.isbn
+inner join tt_user_book_crossing c on b.user_id=c.refrence_user_id
+union all 
+select a.book_id,a.ISBN, c.user_id,b.Book_Rating,c.is_active  from tt_book_book_crossing a inner join book_crossing_rating2 b
+on a.isbn=b.isbn
+inner join tt_user_book_crossing c on b.user_id=c.refrence_user_id
+
+
+ ---------- Updating data_source ------------
+update tt_user set data_source='book_crossing'
+
+
+ ---------- Inserting into tt_user for goodbooks ------------
+DECLARE @i int = 1
+WHILE @i <= 13123 
+BEGIN
+    SET @i = @i + 1
+    insert into tt_user(first_name,last_name,birth_year,gender,is_active,data_source)
+	values('John', 'Doe', 0, 'Not Specified', 1, 'goodbooks')
+END
+
+
+ ---------- Resolving the conflict issues ------------
+
+DECLARE @i int = 0, @j int = 557721
+WHILE @i <= 278855 
+BEGIN
+    SET @i = @i + 1 
+	set @j = @j+1
+    update tt_user set test1=@j where user_id=@i
+END
+
+update tt_user set test1=null where user_id=278856
+
+ ---------- Inserting into tt_rating ------------
+insert into tt_rating(book_id, user_id, rating, is_active, data_source)
+select b.book_id, c.user_id, a.rating,1 as is_active, 'book_crossing' as data_source
+from tt_rating_book_crossing a 
+inner join tt_master_book b on a.isbn = b.isbn
+inner join tt_user c on a.user_id=c.test1
+
+
+ ---------- Calculating rating in 1 to 5 ------------
+update tt_rating set rating=rating/2
+
+
+ ---------- Resolving the conflict issues ------------
+DECLARE @i int = 1, @j int =1000
+WHILE @i <= 10000 
+BEGIN
+    update tt_book_goodbooks set refrence_book_id=@i where book_id=@j
+    SET @i = @i + 1 
+	set @j = @j+1
+END
+
+
+ ---------- Validating if data is correctly loaded ------------
+
+select b.user_id, c.book_id, a.rating
+from goodbooks_ratings a
+inner join tt_user_goodbooks b on b.refrence_user_id = a.user_id
+inner join tt_book_goodbooks c on c.refrence_book_id = a.book_id
+select refrence_book_id,* from tt_book_goodbooks where book_id in(5080,1176)
+select refrence_user_id,* from tt_user_goodbooks where user_id in(278857,278862)
+user_id	book_id	rating
+278857	5080	4
+278862	1176	5
+select * from goodbooks_ratings where user_id in(2,8) and book_id in(177, 4081)
+
+
+ ---------- Applying the logic for data_source ------------
+update a set data_source='goodbooks'
+from tt_master_book a inner join tt_book_goodbooks b on
+a.book_title = b.title and a.book_author=b.book_author
+where a.data_source is null-- not like '%goodbooks%'
+
+
+update a set a.data_source='book_crossing and goodreads and goodbooks'
+--select a.* 
+from tt_master_book a inner join tt_book_goodbooks b on a.book_title=b.title and a.book_author=b.book_author
+
+where --a.is_active=1
+ data_source ='book_crossing and goodreads'
+ 
+ 
+ update a set a.data_source='goodreads and goodbooks'
+--select a.* 
+from tt_master_book a inner join tt_book_goodbooks b on a.book_title=b.title and a.book_author=b.book_author
+
+where --a.is_active=1
+ data_source ='goodreads'
+ 
+ 
+ update a set a.data_source='book_crossing and goodbooks'
+--select a.* 
+from tt_master_book a inner join tt_book_goodbooks b on a.book_title=b.title and a.book_author=b.book_author
+
+where --a.is_active=1
+ data_source ='book_crossing'
+ 
+ select a.* 
+from tt_master_book a inner join tt_book_goodbooks b on a.book_title=b.title and a.book_author=b.book_author
+
+where a.is_active=1
+ and data_source not like '%goodbooks%'
+
+ 
+ alter table tt_book_goodbooks
+add  is_active bit
+ 
+ ---------- Cleaning ------------
+ select * from tt_book_goodbooks where book_id not in
+(
+select b.book_id from tt_master_book a inner join tt_book_goodbooks b on a.book_title=b.title and a.book_author=b.book_author
+ where a.data_source like '%goodbooks%' and a.is_active=1) 
+ 
+ 
+ update tt_book_goodbooks set is_active=0 where book_id not in
+(
+select b.book_id from tt_master_book a inner join tt_book_goodbooks b on a.book_title=b.title and a.book_author=b.book_author
+ where a.data_source like '%goodbooks%' and a.is_active=1) 
+ 
+ 
+ update tt_book_goodbooks set is_active=1 where book_id  in
+(
+select b.book_id from tt_master_book a inner join tt_book_goodbooks b on a.book_title=b.title and a.book_author=b.book_author
+ where a.data_source like '%goodbooks%' and a.is_active=1) 
+ 
+  ---------- Checking duplicates ------------
+select book_title, book_author, count(*) from #temp_bookid group by  book_title, book_author having count(*)>1
+
+select title, book_author,count(*) from tt_book_goodbooks where is_active=1 group by  title, book_author having count(*)>1
+select * from tt_book_goodbooks where title in('Fruits Basket (Fruits Basket)', 'I Am Legend')
+
+update tt_book_goodbooks set is_active=0 where book_id in(1928, 9889)
+ 
+ 
+ ---------- Handling the issues for book_author ------------
+ select * from tt_book_goodbooks where title in(
+'Britt-Marie Was Here','Czas pogardy','Falling Man','Hunter x Hunter, Vol. 01 (Hunter x Hunter, #1)','Kushiel''s Avatar','Miecz przeznaczenia','Naiv. Super.'
+,'Pandora Hearts 1','Pani Jeziora','Persepolis, Volume 1','Stenhuggaren','The Hidden Child','The Ice Princess','The Portable Atheist: Essential Readings for the Nonbeliever'
+,'Tokyo Ghoul, tome 1 (Tokyo Ghoul, #1)')
+ 
+ update tt_book_goodbooks set is_active=1 where title in(
+'Britt-Marie Was Here','Czas pogardy','Falling Man','Hunter x Hunter, Vol. 01 (Hunter x Hunter, #1)','Kushiel''s Avatar','Miecz przeznaczenia','Naiv. Super.'
+,'Pandora Hearts 1','Pani Jeziora','Persepolis, Volume 1','Stenhuggaren','The Hidden Child','The Ice Princess','The Portable Atheist: Essential Readings for the Nonbeliever'
+,'Tokyo Ghoul, tome 1 (Tokyo Ghoul, #1)')
+ 
+ select * from tt_master_book where book_title in(
+'Czas pogardy','Kushiel''s Avatar','Miecz przeznaczenia','Naiv. Super.'
+,'Pandora Hearts 1','Pani Jeziora','Persepolis, Volume 1','Stenhuggaren','The Hidden Child','The Ice Princess'
+)
+
+update tt_master_book set data_source='book_crossing and goodreads' where book_id=281561
+update tt_master_book set data_source='goodreads' where book_id in(
+283615,286927,282185,283661,287551,284105,284424,287953,288495
+)
+ 
+  select * from tt_book_goodbooks where title in(
+'Britt-Marie Was Here','Tokyo Ghoul, tome 1 (Tokyo Ghoul, #1)','Hunter x Hunter, Vol. 01 (Hunter x Hunter, #1)'
+,'The Portable Atheist: Essential Readings for the Nonbeliever','Falling Man'
+) order by title
+
+ select * from tt_master_book where book_title in(
+'Britt-Marie Was Here','Tokyo Ghoul, tome 1 (Tokyo Ghoul, #1)','Hunter x Hunter, Vol. 01 (Hunter x Hunter, #1)'
+,'The Portable Atheist: Essential Readings for the Nonbeliever','Falling Man'
+) order by book_title
+
+ update tt_book_goodbooks set book_author='Fredrik Backman, Henning Koch' where book_id=5713
+ update tt_book_goodbooks set book_author='Don DeLillo' where book_id=10631
+ update tt_book_goodbooks set book_author='Yoshihiro Togashi' where book_id=6338
+ update tt_book_goodbooks set book_author='Christopher Hitchens, Titus Lucretius Carus, Omar KhayyÃ¡m, Thomas Hobbes, Baruch Spinoza, David Hume, James Boswell, Percy Bysshe Shelley, George Eliot, Charles Darwin, Leslie Stephen, Anatole France, Mark Twain, Joseph Conrad, Thomas Hardy, Emma Goldman, H.P. Lovecraft, Carl Van Doren, H.L. Mencken, Sigmund Freud, Albert Einstein, George Orwell, John Betjeman, Chapman Cohen, Bertrand Russell, Philip Larkin, Martin Gardner, Carl Sagan, John Updike, John Leslie Mackie, Michael Shermer, A.J. Ayer' 
+ where book_id=7201
+ update tt_book_goodbooks set book_author='Sui Ishida' where book_id=6073
+ 
+
+ ---------- Inserting into tt_rating_goodbooks ------------
+
+ insert into tt_rating_goodbooks(book_id, user_id, rating, book_title, book_author)
+select distinct c.book_id, b.user_id,a.rating, c.title, c.book_author
+from goodbooks_ratings a
+inner join tt_user_goodbooks b on b.refrence_user_id = a.user_id
+inner join tt_book_goodbooks c on c.refrence_book_id = a.book_id
+where c.is_active=1
+--10,43,204
+
+--insert into tt_rating(book_id, user_id, rating, is_active, data_source)
+select c.book_id, a.user_id, a.rating, 1 as is_active, 'goodbooks' as data_source
+from tt_rating_goodbooks a
+--inner join tt_book_goodbooks b on a.book_id = b.book_id
+inner join tt_master_book c on c.book_title = a.book_title and c.book_author = a.book_author
+where c.data_source like '%goodbooks%'  and c.is_active=1
+--10,43,204
+
+
+
+
+update tt_book_goodreads_final set is_active=0 where book_title is null
+
+
+select book_title,book_author, count(*) from tt_book_goodreads_final where is_active=1 group by book_title,book_author having count(*)>1
+
+select * from tt_book_goodreads_final where book_title in(
+'Goth', 'Hujan Bulan Juni'
+)
+
+update tt_book_goodreads_final set is_active=0 where book_id in(6419,11259)
+
+
+
+
+
+
+
+
