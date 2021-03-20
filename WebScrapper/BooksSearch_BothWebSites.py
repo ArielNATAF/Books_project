@@ -38,6 +38,12 @@ def GoodReadsPartialSearchFunction(isbn =  None):
             for i in range(len(searchForISBN_Lang_Awards_Series)):
                 if searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowTitle").text == 'Literary Awards':
                     awardsSearched = searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowItem").text
+
+                if searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowTitle").text == 'Edition Language':
+                    languageSearched = searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowItem").text
+                    #In order to be compliant with GoogleBooks names
+                    if (languageSearched == 'English'):
+                        languageSearched = 'en'
     
             #Search for knowing if book is part of a serie
             #=> If yes, we keep the URL of the other mentionned books of the serie
@@ -88,8 +94,11 @@ def internetSearch(f, SaveFileName, theColumns, ind_start, ind_end):
         retGoogle = False
         retGoodReads = False
         retPartial = False
-        
-        csvLineParsed = P.ParserCsvInputBookCrossing(f.readline())
+
+        lili = f.readline()
+        #print(lili)
+        csvLineParsed = P.ParserCsvInputBookCrossing(lili)
+        #print(csvLineParsed)
         
         #First we use Google Books web site: search fastest
         retGoogle, refBookGoogle = G.GoogleSearchFunction(isbn = csvLineParsed[0])
@@ -138,7 +147,7 @@ if __name__ == "__main__":
     
         cheminCommon = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees/'
         cheminCommon = cheminCommon.replace('\\', '/')
-        SaveFileName = cheminCommon + 'bothWebSites_InternetSearch_14_03_2021_AllBooksSearch.csv'
+        SaveFileName = cheminCommon + 'bothWebSites_InternetSearch_14_03_2021_815___.csv'
         
         theColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', \
                             'Year-Of-Publication', 'Publisher', 'Category', 'Description', 'Language', \
@@ -149,7 +158,7 @@ if __name__ == "__main__":
         f.readline()
         
         #Google search function
-        NotFoundBooks = internetSearch(f, SaveFileName, theColumns, 0, 270000) 
+        NotFoundBooks = internetSearch(f, SaveFileName, theColumns, 1379, 270000) 
     
         print("Not found books: %d" % NotFoundBooks)
         f.close()   

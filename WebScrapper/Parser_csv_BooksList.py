@@ -4,10 +4,8 @@ import re
 def ParserCsvInputBookCrossing(currentLine):
     L = currentLine.split('"')
     
-    if len(L) == 17:
-        return [L[i] for i in range(16) if i%2 == 1]
+    return [L[i] for i in range(16) if i%2 == 1]
 
-    L = currentLine.split(';')
     
 #    L = currentLine.split(';')
 #    if len(L) == 8:
