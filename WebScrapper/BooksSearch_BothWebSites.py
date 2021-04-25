@@ -18,6 +18,7 @@ def GoodReadsPartialSearchFunction(isbn =  None):
     awardsSearched = ''
     authorGenreSearched = ''
     goodreadsLinksSeriesList = []
+    avgRating = ""
 
     ISBNfound = False
     
@@ -34,6 +35,9 @@ def GoodReadsPartialSearchFunction(isbn =  None):
 
         #Now we are on the specific book's web page
         if ISBNfound:
+            if soup.find("span", itemprop="ratingValue"):
+                avgRating = soup.find("span", itemprop="ratingValue").text.strip()
+
             searchForISBN_Lang_Awards_Series = soup.find("div", id="bookDataBox").find_all("div", class_="clearFloats")
             for i in range(len(searchForISBN_Lang_Awards_Series)):
                 if searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowTitle").text == 'Literary Awards':
@@ -69,24 +73,27 @@ def GoodReadsPartialSearchFunction(isbn =  None):
                     authorGenreSearched = authorGenreSearched.replace('\n', '').strip()
     
     
-        return (ISBNfound, [awardsSearched, authorGenreSearched, goodreadsLinksSeriesList])
+        return (ISBNfound, [awardsSearched, authorGenreSearched, goodreadsLinksSeriesList, avgRating])
     
     except:
-        return (False, [awardsSearched, authorGenreSearched, goodreadsLinksSeriesList])    
+        return (False, [awardsSearched, authorGenreSearched, goodreadsLinksSeriesList, avgRating])    
     
 
 
-def internetSearch(f, SaveFileName, theColumns, ind_start, ind_end):
+def internetSearch(f, SaveFileName, theColumns, ind_start, ind_end, Re = False):
 
-    NotFoundBooks = 0    
+    NotFoundBooks_ind = 0   
+    NotFoundBooks_bool = True
+    
     pdT = pd.DataFrame(columns = theColumns)
 
     for i in range(0, ind_start-1): 
         f.readline()
         
-    csvLineParsed = P.ParserCsvInputBookCrossing(f.readline())
+    csvLineParsed = P.ParserCsvInputBookCrossing(f.readline(), Re)
     ret, refBookGoogle = G.GoogleSearchFunction(isbn = csvLineParsed[0])
     pdT.loc[0] = refBookGoogle 
+    #print(pdT.loc[0].ISBN_13, type(pdT.loc[0].ISBN_13))
     pdT.loc[0:1].to_csv(SaveFileName, sep = ';', index = False, mode = 'w')
     
     #it doesn't start at 0 so that the trigger index 'len(pdT) - savingRate:len(pdT)+1' of save is correct
@@ -97,7 +104,7 @@ def internetSearch(f, SaveFileName, theColumns, ind_start, ind_end):
 
         lili = f.readline()
         #print(lili)
-        csvLineParsed = P.ParserCsvInputBookCrossing(lili)
+        csvLineParsed = P.ParserCsvInputBookCrossing(lili, Re)
         #print(csvLineParsed)
         
         #First we use Google Books web site: search fastest
@@ -114,25 +121,29 @@ def internetSearch(f, SaveFileName, theColumns, ind_start, ind_end):
                 retGoodReads, refBookGoodReads = GR.GoodReadsSearchFunction(title = csvLineParsed[1], author = csvLineParsed[2].split(';')[-1])
                 if (retGoodReads == True):
                     refBook = refBookGoodReads
+                    NotFoundBooks_bool = False
                 else:
-                    NotFoundBooks += 1
+                    NotFoundBooks_ind += 1
             else:
                 refBook = refBookGoodReads
+                NotFoundBooks_bool = False
                 
         else:
             refBook = refBookGoogle
+            NotFoundBooks_bool = False
             
             #If ISBN found on Google Books, we complete some columns with GoodReads search
             retPartial, refBookPartial = GoodReadsPartialSearchFunction(isbn = csvLineParsed[0])
             if (retPartial == True):
-                refBook[-3:] = refBookPartial
+                refBook[-4:] = refBookPartial
 
-        pdT.loc[0] = refBook
-        pdT.loc[0:1].to_csv(SaveFileName, sep = ';', index = False, mode = 'a', header = False)
-        #Google doesn't like when too much requests are performed...
-        #time.sleep(10.0)
+        if NotFoundBooks_bool != True:
+            pdT.loc[0] = refBook
+            pdT.loc[0:1].to_csv(SaveFileName, sep = ';', index = False, mode = 'a', header = False)
+            NotFoundBooks_bool = True
+
         
-    return NotFoundBooks
+    return NotFoundBooks_ind
 
 
 
@@ -142,23 +153,23 @@ if __name__ == "__main__":
         warnings.warn("Let this be your last warning")
         warnings.simplefilter("ignore")
         
-        cheminBookCrossing = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees\BookCrossing/'
+        cheminBookCrossing = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_nonStats\Projet\Donnees\BookCrossing/'
         cheminBookCrossing = cheminBookCrossing.replace('\\', '/')
     
-        cheminCommon = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees/'
+        cheminCommon = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_nonStats\Projet\Donnees/'
         cheminCommon = cheminCommon.replace('\\', '/')
-        SaveFileName = cheminCommon + 'bothWebSites_InternetSearch_14_03_2021_815___.csv'
+        SaveFileName = cheminCommon + 'bothWebSites_InternetSearch_25_01_2021.csv'
         
         theColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', \
                             'Year-Of-Publication', 'Publisher', 'Category', 'Description', 'Language', \
-                            'Image', 'Pages', 'Awards', "Author's genre", 'Same serie']
+                            'Image', 'Pages', 'Awards', "Author's genre", 'Same serie', 'average_rating']
     
         #List of books to search on Google
-        f = open(cheminBookCrossing + 'BX-Books.csv', encoding="utf8", errors="replace")
+        f = open(cheminBookCrossing + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="replace")
         f.readline()
         
         #Google search function
-        NotFoundBooks = internetSearch(f, SaveFileName, theColumns, 1379, 270000) 
+        NotFoundBooks = internetSearch(f, SaveFileName, theColumns, 0, 10, Re = True) 
     
         print("Not found books: %d" % NotFoundBooks)
         f.close()   

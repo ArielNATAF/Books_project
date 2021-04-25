@@ -17,9 +17,9 @@ def GoogleSearchFunction(isbn = None, title = None, author = None):
     ISBNdict = {"ISBN_10": 0, "ISBN_13": 0, "OtherID": 0}
     
     #all is reset
-    ISBNdict["ISBN_10"] = 0.0
-    ISBNdict["ISBN_13"] = 0.0   
-    ISBNdict["OtherID"] = 0.0
+    ISBNdict["ISBN_10"] = ""
+    ISBNdict["ISBN_13"] = ""   
+    ISBNdict["OtherID"] = ""
     autGoogle = []
     titleSearched = ''
     autSearched = ''
@@ -104,10 +104,12 @@ def GoogleSearchFunction(isbn = None, title = None, author = None):
                     
                     if repGoogle['items'][0]['volumeInfo']['industryIdentifiers'][k]['type'] == "ISBN_10":
                         ISBNdict["ISBN_10"] = repGoogle['items'][0]['volumeInfo']['industryIdentifiers'][k]['identifier']
+                        #print("ISBN 10", ISBNdict["ISBN_10"], type(ISBNdict["ISBN_10"]))
                         ISBNfound = True
                         
                     elif repGoogle['items'][0]['volumeInfo']['industryIdentifiers'][k]['type'] == "ISBN_13":
                         ISBNdict["ISBN_13"] = repGoogle['items'][0]['volumeInfo']['industryIdentifiers'][k]['identifier']
+                        #print("ISBN 13", ISBNdict["ISBN_13"], type(ISBNdict["ISBN_13"]))
                         ISBNfound = True
                         
                     else:
@@ -140,15 +142,15 @@ def GoogleSearchFunction(isbn = None, title = None, author = None):
                 pageSearched = repGoogle['items'][0]['volumeInfo']['pageCount']
 
         return (ISBNfound, [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, \
-                           pubData, pubSearched, catSearched, descSearched, langSearched, imageSearched, pageSearched, '', '', ''])
+                           pubData, pubSearched, catSearched, descSearched, langSearched, imageSearched, pageSearched, '', '', '', ''])
 
     except:
         return (False, [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, \
-                           pubData, pubSearched, catSearched, descSearched, langSearched, imageSearched, pageSearched, '', '', ''])
+                           pubData, pubSearched, catSearched, descSearched, langSearched, imageSearched, pageSearched, '', '', '', ''])
 
 
 
-def GoogleSearch(f, SaveFileName, theColumns, ind_start, ind_end):
+def GoogleSearch(f, SaveFileName, theColumns, ind_start, ind_end, Re = False):
 
     NotFoundBooks = 0    
     pdT = pd.DataFrame(columns = theColumns)
@@ -156,14 +158,14 @@ def GoogleSearch(f, SaveFileName, theColumns, ind_start, ind_end):
     for i in range(0, ind_start-1): 
         f.readline()
         
-    csvLineParsed = P.ParserCsvInputBookCrossing(f.readline())
+    csvLineParsed = P.ParserCsvInputBookCrossing(f.readline(), Re)
     ret, refBook = GoogleSearchFunction(isbn = csvLineParsed[0])
     pdT.loc[0] = refBook
     pdT.loc[0:1].to_csv(SaveFileName, sep = ';', index = False, mode = 'w')
 
     #i doesn't start at 0 so that the trigger index 'len(pdT) - savingRate:len(pdT)+1' of save is correct
     for i in range(ind_start+1, ind_end):    
-        csvLineParsed = P.ParserCsvInputBookCrossing(f.readline())
+        csvLineParsed = P.ParserCsvInputBookCrossing(f.readline(), Re)
 
         ret = False
         ret, refBook = GoogleSearchFunction(isbn = csvLineParsed[0])
@@ -213,20 +215,20 @@ if __name__ == "__main__":
     cheminBookCrossing = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees\BookCrossing/'
     cheminBookCrossing = cheminBookCrossing.replace('\\', '/')
     
-    cheminGoogleBooks = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees\GoogleBooks/'
+    cheminGoogleBooks = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees\Scrapped_GoogleBooks/'
     cheminGoogleBooks = cheminGoogleBooks.replace('\\', '/')
-    SaveFileName = cheminGoogleBooks + 'GoogleBooks_InternetSearch_14_03_2021.csv'
+    SaveFileName = cheminGoogleBooks + 'GoogleBooks_InternetSearch_25_04_2021.csv'
 
     theColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', \
                         'Year-Of-Publication', 'Publisher', 'Category', 'Description', 'Language', \
-                        'Image', 'Pages', 'Awards', "Author's genre", 'Same serie']
+                        'Image', 'Pages', 'Awards', "Author's genre", 'Same serie', 'average_rating']
 
     #List of books to search on Google
     f = open(cheminBookCrossing + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="replace")
     f.readline()
     
     #Google search function
-    NotFoundBooks = GoogleSearch(f, SaveFileName, theColumns, 0, 15) 
+    NotFoundBooks = GoogleSearch(f, SaveFileName, theColumns, 0, 15, Re = True) 
 
     print("Not found books: %d" % NotFoundBooks)
     f.close()   

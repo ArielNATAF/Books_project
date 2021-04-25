@@ -21,9 +21,9 @@ def GoodReadsSearchFunction(isbn = None, title = None, author = None):
     ISBNdict = {"ISBN_10": 0, "ISBN_13": 0, "OtherID": 0}
     
     #all is reset
-    ISBNdict["ISBN_10"] = 0.0
-    ISBNdict["ISBN_13"] = 0.0   
-    ISBNdict["OtherID"] = 0.0
+    ISBNdict["ISBN_10"] = ""
+    ISBNdict["ISBN_13"] = ""   
+    ISBNdict["OtherID"] = ""
     autGoodReads = ''
     titleSearched = ''
     autSearched = ''
@@ -36,6 +36,7 @@ def GoodReadsSearchFunction(isbn = None, title = None, author = None):
     pagesSearched = 0
     authorGenreSearched = ''
     goodreadsLinksSeriesList = []
+    avgRating = ""
 
     AUTHORfound = False
     ISBNfound = False
@@ -89,6 +90,9 @@ def GoodReadsSearchFunction(isbn = None, title = None, author = None):
         #Now we are on the specific book's web page
         #=> Common analysis begins
         if ISBNfound:
+            if soup.find("span", itemprop="ratingValue"):
+                avgRating = soup.find("span", itemprop="ratingValue").text.strip()
+
             titleSearched = soup.find("h1", id="bookTitle").text
             titleSearched = titleSearched.replace('\n', '').strip()
             
@@ -177,15 +181,15 @@ def GoodReadsSearchFunction(isbn = None, title = None, author = None):
     
         return (ISBNfound, [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, \
                 pubData, pubSearched, catSearched, descSearched, languageSearched, '', pagesSearched, awardsSearched, \
-                authorGenreSearched, goodreadsLinksSeriesList])
+                authorGenreSearched, goodreadsLinksSeriesList, avgRating])
     
     except:
         return (False, [ISBNdict["ISBN_10"], ISBNdict["ISBN_13"], ISBNdict["OtherID"], titleSearched, autSearched, \
                 pubData, pubSearched, catSearched, descSearched, languageSearched, '', pagesSearched, awardsSearched, \
-                authorGenreSearched, goodreadsLinksSeriesList])    
+                authorGenreSearched, goodreadsLinksSeriesList, avgRating])    
 
 
-def GoodReadsSearch(f, SaveFileName, theColumns, ind_start, ind_end):
+def GoodReadsSearch(f, SaveFileName, theColumns, ind_start, ind_end, Re = False):
 
     NotFoundBooks = 0    
     pdT = pd.DataFrame(columns = theColumns)
@@ -193,7 +197,7 @@ def GoodReadsSearch(f, SaveFileName, theColumns, ind_start, ind_end):
     for i in range(0, ind_start-1): 
         f.readline()
     
-    csvLineParsed = P.ParserCsvInputBookCrossing(f.readline())
+    csvLineParsed = P.ParserCsvInputBookCrossing(f.readline(), Re)
     ret, refBook = GoodReadsSearchFunction(isbn = csvLineParsed[0])
     pdT.loc[0] = refBook
     pdT.loc[0:1].to_csv(SaveFileName, sep = ';', index = False, mode = 'w')
@@ -202,7 +206,7 @@ def GoodReadsSearch(f, SaveFileName, theColumns, ind_start, ind_end):
     #i doesn't start at 0 so that the trigger index 'len(pdT) - savingRate:len(pdT)+1' of save is correct
     for i in range(ind_start+1, ind_end):  
         
-        csvLineParsed = P.ParserCsvInputBookCrossing(f.readline())
+        csvLineParsed = P.ParserCsvInputBookCrossing(f.readline(), Re)
         
         ret = False
         ret, refBook = GoodReadsSearchFunction(isbn = csvLineParsed[0])
@@ -243,24 +247,24 @@ if __name__ == "__main__":
     
 #Search result
 ############################
-    cheminBookCrossing = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees\BookCrossing/'
+    cheminBookCrossing = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_nonStats\Projet\Donnees\BookCrossing/'
     cheminBookCrossing = cheminBookCrossing.replace('\\', '/')
     
-    cheminGoodReads = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_with_Python\Projet\Donnees\GoodReads/'
+    cheminGoodReads = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_nonStats\Projet\Donnees\GoodReads/'
     cheminGoodReads = cheminGoodReads.replace('\\', '/')
 
     theColumns = ['ISBN_10', 'ISBN_13', 'OtherID', 'Book-Title', 'Book-Author', \
                         'Year-Of-Publication', 'Publisher', 'Category', 'Description', 'Language', \
-                        'Image', 'Pages', 'Awards', "Author's genre", 'Same serie']
+                        'Image', 'Pages', 'Awards', "Author's genre", 'Same serie', 'average_rating']
     
-    SaveFileName = cheminGoodReads + 'GoodreadsBooks_InternetSearch_14_03_2021.csv'
+    SaveFileName = cheminGoodReads + 'bothWebSites_InternetSearch_25_01_2021.csv'
 
     #List of books to search on Google
-    f = open(cheminBookCrossing + 'Extrait1000_BX-Books_et1awards.csv', encoding="utf8", errors="replace")
+    f = open(cheminBookCrossing + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="replace")
     f.readline()
     
     #Google search function
-    NotFoubndBooks = GoodReadsSearch(f, SaveFileName, theColumns, 0, 2) 
+    NotFoubndBooks = GoodReadsSearch(f, SaveFileName, theColumns, 0, 2, Re = True) 
 
 
     print("Not found books: %d" % NotFoubndBooks)
