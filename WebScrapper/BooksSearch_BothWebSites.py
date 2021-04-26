@@ -41,7 +41,7 @@ def GoodReadsPartialSearchFunction(isbn =  None):
             searchForISBN_Lang_Awards_Series = soup.find("div", id="bookDataBox").find_all("div", class_="clearFloats")
             for i in range(len(searchForISBN_Lang_Awards_Series)):
                 if searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowTitle").text == 'Literary Awards':
-                    awardsSearched = searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowItem").text
+                    awardsSearched = searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowItem").text.strip()
 
                 if searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowTitle").text == 'Edition Language':
                     languageSearched = searchForISBN_Lang_Awards_Series[i].find("div", "infoBoxRowItem").text
@@ -153,7 +153,7 @@ if __name__ == "__main__":
         warnings.warn("Let this be your last warning")
         warnings.simplefilter("ignore")
         
-        cheminBookCrossing = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_nonStats\Projet\Donnees\BookCrossing/'
+        cheminBookCrossing = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_nonStats\Projet\Donnees\GoodBooks\goodbooks-10k-master\goodbooks-10k-master/'
         cheminBookCrossing = cheminBookCrossing.replace('\\', '/')
     
         cheminCommon = 'D:\DocsDeCara\Boulot\IA_ML\DSTI\Programme\ML_nonStats\Projet\Donnees/'
@@ -165,7 +165,7 @@ if __name__ == "__main__":
                             'Image', 'Pages', 'Awards', "Author's genre", 'Same serie', 'average_rating']
     
         #List of books to search on Google
-        f = open(cheminBookCrossing + 'Extrait1000_BX-Books.csv', encoding="utf8", errors="replace")
+        f = open(cheminBookCrossing + 'books.csv', encoding="utf8", errors="replace")
         f.readline()
         
         #Google search function
