@@ -1,0 +1,83 @@
+## Its In progress
+import json
+import uuid
+import boto3
+import botocore
+
+s3_client = boto3.client('s3')  # using boto3 client to connect s3
+dynamodb = boto3.resource("dynamodb")
+book_table = dynamodb.Table('tt_master_book')
+flag_table = dynamodb.Table('tt_book_flag')
+
+## Insert the entry in the flag table if its not exist
+try:
+    flag_table.put_item(
+        Item={
+            'book_flag_id': '1',
+            'max_book_id': 100
+        },
+        ConditionExpression='attribute_not_exists(foo)'
+    )
+except botocore.exceptions.ClientError as e:
+    # Ignore the ConditionalCheckFailedException, bubble up
+    # other exceptions.
+    if e.response['Error']['Code'] != 'ConditionalCheckFailedException':
+        raise
+
+## Fetch the value from the flag table for column- max_book_id
+response = flag_table.get_item(
+    Key={
+        'book_flag_id': '1'
+
+    }
+)
+item = response['Item']
+max_book_id =(item['max_book_id'])
+print(max_book_id)
+
+
+def lambda_handler(event, context):
+    try:
+        bucket_name = event["Records"][0]["s3"]["bucket"]["name"]
+        s3_file_name = event["Records"][0]["s3"]["object"]["key"]
+
+        response = s3_client.get_object(Bucket = bucket_name, Key = s3_file_name)
+        data = response["Body"].read().decode('utf-8')
+
+        #print(data)
+        first = True
+
+        book = data.split('\n')
+        for bk in book:
+            if first:
+                first = False
+            else:
+                bk_array = bk.split('|')
+                table.put_item(
+                    Item = {
+                        'Uid': uuid.uuid1(),
+                        'book_id': max_book_id+1,
+                        'book_title': bk_array[3],
+                        'book_author': bk_array[4],
+                        'isbn': bk_array[0],
+                        'isbn_13': bk_array[1],
+                        'year_of_publication': bk_array[5],
+                        'Category': bk_array[7],
+                        #'Category2': bk_array[8],
+                        'book_language': bk_array[10],
+                        'number_of_pages': bk_array[12],
+                        'author_genres': bk_array[13],
+                        #'author_genres2': bk_array[14],
+                        'book_average_rating': bk_array[16],
+                        'awards': bk_array[17]
+                    }
+                )
+
+
+
+
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello India!')
+    }
