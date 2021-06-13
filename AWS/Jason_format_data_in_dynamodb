@@ -1,0 +1,44 @@
+{
+  "author_genres": {
+    "S": "romanc"
+  },
+  "awards": {
+    "S": ""
+  },
+  "book_author": {
+    "S": "Natasha Preston"
+  },
+  "book_average_rating": {
+    "S": "3.96"
+  },
+  "book_description": {
+    "S": "For eleven years, Oakley Farrell has been silent."
+  },
+  "book_id": {
+    "N": "3267"
+  },
+  "book_language": {
+    "S": "en"
+  },
+  "book_title": {
+    "S": "Silence"
+  },
+  "Category": {
+    "S": "fiction"
+  },
+  "isbn": {
+    "S": "1480118516"
+  },
+  "isbn_13": {
+    "S": "9781480118515.0"
+  },
+  "number_of_pages": {
+    "S": "218.0"
+  },
+  "Uid": {
+    "S": "08eca000-1248-470a-80a6-ddd8b63b27c3"
+  },
+  "year_of_publication": {
+    "S": "2012-01-01"
+  }
+}
