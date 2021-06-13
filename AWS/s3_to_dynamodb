@@ -45,6 +45,8 @@ def lambda_handler(event, context):
                     'author_genres_2': book_array[12],
                     'book_average_rating': book_array[13],
                     'awards': book_array[14],
+                    'data_source': 'web_scrapping',
+                    'is_active': 1,
                     
                 }
             )
